@@ -1,0 +1,349 @@
+package com.example.boardexamreviewer.ui.pomodoro;
+
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.IBinder;
+import android.text.Editable;
+import android.text.TextWatcher;
+import androidx.appcompat.app.AlertDialog;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import com.example.boardexamreviewer.data.local.AppDatabase;
+import com.example.boardexamreviewer.data.local.entities.StudySessionEntity;
+import com.example.boardexamreviewer.databinding.FragmentPomodoroBinding;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * This fragment manages the study timer, white noise, and session tracking.
+ */
+public class PomodoroFragment extends Fragment {
+
+    private FragmentPomodoroBinding binding;
+    private TimerService timerService;
+    private boolean isBound = false;
+    private boolean isWorking = true;
+    private boolean extensionUsed = false;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+    private final ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            TimerService.TimerBinder binder = (TimerService.TimerBinder) service;
+            timerService = binder.getService();
+            
+            isBound = true;
+            
+            SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+            String savedNoise = prefs.getString("selected_ambient", "None");
+            String savedAlarm = prefs.getString("selected_alarm", "Wake Up");
+            timerService.setSelectedAmbient(savedNoise);
+            timerService.setSelectedAlarm(savedAlarm);
+
+            setupServiceListeners();
+            updateUIFromService();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName arg0) {
+            isBound = false;
+        }
+    };
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        binding = FragmentPomodoroBinding.inflate(inflater, container, false);
+        return binding.getRoot();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        Intent serviceIntent = new Intent(requireContext(), TimerService.class);
+        requireContext().startService(serviceIntent);
+        requireContext().bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE);
+
+        setupSpinners();
+
+        binding.etWorkTime.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (timerService == null || !timerService.isTimerRunning) {
+                    try {
+                        long mins = Long.parseLong(s.toString());
+                        updateCountDownText(mins * 60 * 1000);
+                    } catch (NumberFormatException e) {
+                        updateCountDownText(25 * 60 * 1000);
+                    }
+                }
+            }
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        });
+
+        binding.btnStartPause.setOnClickListener(v -> {
+            if (timerService != null && timerService.isTimerRunning) {
+                pauseTimer();
+            } else {
+                startTimer();
+            }
+        });
+
+        binding.btnStop.setOnClickListener(v -> stopTimer());
+
+        binding.btnExtend.setOnClickListener(v -> {
+            if (!extensionUsed && timerService != null && timerService.isTimerRunning) {
+                extendTimer();
+            }
+        });
+    }
+
+    private void setupServiceListeners() {
+        timerService.onTickListener = this::updateCountDownText;
+        timerService.onFinishListener = () -> {
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    if (isWorking) {
+                        saveSession();
+                    }
+                    isWorking = !isWorking;
+                    showAlarmPopup();
+                    
+                    updateUIFromService();
+                    extensionUsed = false;
+                });
+            }
+        };
+    }
+
+    private void updateUIFromService() {
+        if (timerService != null) {
+            boolean isRunning = timerService.isTimerRunning;
+            binding.etWorkTime.setEnabled(!isRunning);
+            binding.etBreakTime.setEnabled(!isRunning);
+
+            if (isRunning || timerService.timeLeftInMillis > 0) {
+                updateCountDownText(timerService.timeLeftInMillis);
+                isWorking = !timerService.isBreakMode;
+            } else {
+                long mins;
+                try {
+                    mins = Long.parseLong(isWorking ? binding.etWorkTime.getText().toString() : binding.etBreakTime.getText().toString());
+                } catch (NumberFormatException e) {
+                    mins = isWorking ? 25 : 5;
+                }
+                updateCountDownText(mins * 60 * 1000);
+            }
+            
+            if (isRunning) {
+                binding.btnStartPause.setText("PAUSE");
+            } else if (timerService.timeLeftInMillis > 0) {
+                binding.btnStartPause.setText("RESUME");
+            } else {
+                binding.btnStartPause.setText(isWorking ? "START FOCUS SESSION" : "START BREAK");
+            }
+        }
+    }
+
+    private void setupSpinners() {
+        if (getContext() == null) return;
+        SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        
+        // 1. Setup Ambient Sound Dropdown with FILTERING DISABLED
+        String[] noises = {"None", "Rain", "Fireplace", "Forest", "Snow", "Rough Winds"};
+        ArrayAdapter<String> noiseAdapter = new ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_1, noises) {
+            @NonNull
+            @Override
+            public android.widget.Filter getFilter() {
+                return new android.widget.Filter() {
+                    @Override
+                    protected FilterResults performFiltering(CharSequence constraint) {
+                        FilterResults results = new FilterResults();
+                        results.values = noises;
+                        results.count = noises.length;
+                        return results;
+                    }
+                    @Override
+                    protected void publishResults(CharSequence constraint, FilterResults results) {
+                        notifyDataSetChanged();
+                    }
+                };
+            }
+        };
+        binding.spinnerWhiteNoise.setAdapter(noiseAdapter);
+        String savedNoise = prefs.getString("selected_ambient", "None");
+        binding.spinnerWhiteNoise.setText(savedNoise, false);
+        
+        binding.spinnerWhiteNoise.setOnItemClickListener((parent, view, position, id) -> {
+            String selected = (String) parent.getItemAtPosition(position);
+            prefs.edit().putString("selected_ambient", selected).apply();
+            if (timerService != null) {
+                timerService.setSelectedAmbient(selected);
+                if (timerService.isTimerRunning) {
+                    timerService.playAmbient(selected);
+                }
+            }
+        });
+
+        // 2. Setup Alarm Sound Dropdown with FILTERING DISABLED
+        String[] alarms = {"None", "Wake Up", "Christmas", "Danger", "Morning Flower", "Nuclear", "Rock"};
+        ArrayAdapter<String> alarmAdapter = new ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_1, alarms) {
+            @NonNull
+            @Override
+            public android.widget.Filter getFilter() {
+                return new android.widget.Filter() {
+                    @Override
+                    protected FilterResults performFiltering(CharSequence constraint) {
+                        FilterResults results = new FilterResults();
+                        results.values = alarms;
+                        results.count = alarms.length;
+                        return results;
+                    }
+                    @Override
+                    protected void publishResults(CharSequence constraint, FilterResults results) {
+                        notifyDataSetChanged();
+                    }
+                };
+            }
+        };
+        binding.spinnerAlarm.setAdapter(alarmAdapter);
+        String savedAlarm = prefs.getString("selected_alarm", "Wake Up");
+        binding.spinnerAlarm.setText(savedAlarm, false);
+        
+        binding.spinnerAlarm.setOnItemClickListener((parent, view, position, id) -> {
+            String selected = (String) parent.getItemAtPosition(position);
+            prefs.edit().putString("selected_alarm", selected).apply();
+            if (timerService != null) {
+                timerService.setSelectedAlarm(selected);
+            }
+        });
+    }
+
+    private void startTimer() {
+        if (timerService == null) return;
+        
+        long duration;
+        if (timerService.timeLeftInMillis > 0) {
+            duration = timerService.timeLeftInMillis;
+        } else {
+            long mins;
+            try {
+                mins = Long.parseLong(isWorking ? binding.etWorkTime.getText().toString() : binding.etBreakTime.getText().toString());
+            } catch (NumberFormatException e) {
+                mins = isWorking ? 25 : 5;
+            }
+            duration = mins * 60 * 1000;
+        }
+        timerService.startTimer(duration, !isWorking);
+        
+        String selectedAmbient = binding.spinnerWhiteNoise.getText().toString();
+        timerService.playAmbient(selectedAmbient);
+        
+        binding.btnStartPause.setText("Pause");
+    }
+
+    private void pauseTimer() {
+        if (timerService != null) {
+            timerService.pauseTimer();
+            binding.btnStartPause.setText("Resume");
+        }
+    }
+
+    private void stopTimer() {
+        if (timerService != null) {
+            timerService.resetTimer();
+        }
+        isWorking = true;
+        extensionUsed = false;
+        long workMins;
+        try {
+            workMins = Long.parseLong(binding.etWorkTime.getText().toString());
+        } catch (NumberFormatException e) {
+            workMins = 25;
+        }
+        updateCountDownText(workMins * 60 * 1000);
+        binding.btnStartPause.setText("START FOCUS SESSION");
+        binding.etWorkTime.setEnabled(true);
+        binding.etBreakTime.setEnabled(true);
+    }
+
+    private void extendTimer() {
+        if (timerService == null) return;
+        
+        long newTime = timerService.timeLeftInMillis + 5 * 60 * 1000;
+        timerService.startTimer(newTime, !isWorking);
+        extensionUsed = true;
+        binding.btnExtend.setEnabled(false);
+        Toast.makeText(getContext(), "Extended by 5 minutes", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateCountDownText(long millis) {
+        if (binding == null) return;
+        long minutes = (millis / 1000) / 60;
+        long seconds = (millis / 1000) % 60;
+        binding.tvTimerDisplay.setText(String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds));
+    }
+
+    private void showAlarmPopup() {
+        if (timerService == null) return;
+        
+        new AlertDialog.Builder(requireContext())
+            .setTitle("Time's Up!")
+            .setMessage(!isWorking ? "Break time is over! Ready to focus?" : "Focus session finished! Time for a rest?")
+            .setCancelable(false)
+            .setPositiveButton("Stop Alarm", (dialog, which) -> {
+                if (timerService != null) {
+                    timerService.stopAlarm();
+                    timerService.stopAmbient();
+                }
+            })
+            .show();
+    }
+
+    private void saveSession() {
+        int tempDuration;
+        try {
+            tempDuration = Integer.parseInt(binding.etWorkTime.getText().toString());
+        } catch (NumberFormatException e) {
+            tempDuration = 25;
+        }
+        final int duration = tempDuration;
+        Context appContext = requireContext().getApplicationContext();
+
+        executorService.execute(() -> {
+            AppDatabase db = AppDatabase.getDatabase(appContext);
+            db.appDao().insertStudySession(new StudySessionEntity(duration, "Work"));
+        });
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (isBound) {
+            requireContext().unbindService(connection);
+            isBound = false;
+        }
+        binding = null;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        executorService.shutdown();
+    }
+}

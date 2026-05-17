@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- [PREMIUM BROWN & BEIGE SCHEME] -->
+    <color name="primary_brown">#5D4037</color>
+    <color name="primary_light_brown">#D7CCC8</color>
+    <color name="primary_dark_brown">#3E2723</color>
+    <color name="secondary_brown">#8D6E63</color>
+    <color name="background_beige">#FDFCF0</color>
+    <color name="surface_white">#FFFFFF</color>
+    <color name="text_deep_brown">#3E2723</color>
+    <color name="text_medium_brown">#5D4037</color>
+    <color name="text_gray">#757575</color>
+    <color name="accent_gold">#FFD600</color>
+    <color name="card_blue_tint">#B3CDE0</color>
+    <color name="card_green_tint">#C5E1A5</color>
+    <color name="card_study_green">#4C7031</color>
+    
+    <!-- Standard Colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+</resources>

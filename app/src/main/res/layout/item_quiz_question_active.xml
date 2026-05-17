@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:layout_marginBottom="24dp"
+    android:background="@drawable/bg_white_rounded"
+    android:elevation="4dp">
+
+    <TextView
+        android:id="@+id/tv_active_question_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Question text goes here?"
+        android:textColor="@color/text_deep_brown"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:lineSpacingExtra="4dp"
+        android:layout_marginBottom="16dp" />
+
+    <RadioGroup
+        android:id="@+id/rg_active_options"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/rb_active_a"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/black"
+            android:textSize="15sp"
+            android:paddingVertical="10dp"
+            android:text="Option A" />
+
+        <RadioButton
+            android:id="@+id/rb_active_b"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/black"
+            android:textSize="15sp"
+            android:paddingVertical="10dp"
+            android:text="Option B" />
+
+        <RadioButton
+            android:id="@+id/rb_active_c"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/black"
+            android:textSize="15sp"
+            android:paddingVertical="10dp"
+            android:text="Option C" />
+
+        <RadioButton
+            android:id="@+id/rb_active_d"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/black"
+            android:textSize="15sp"
+            android:paddingVertical="10dp"
+            android:text="Option D" />
+
+    </RadioGroup>
+</LinearLayout>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@color/background_beige">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="AI Quiz Hub"
+            android:textColor="@color/primary_dark_brown"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_view_history"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="History"
+            android:textColor="@color/primary_brown" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_white_rounded"
+        android:padding="24dp"
+        android:elevation="4dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Quiz Settings"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/primary_dark_brown"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Number of Questions"
+            android:textSize="14sp"
+            android:textColor="@color/text_gray"
+            android:layout_marginBottom="8dp" />
+
+        <EditText
+            android:id="@+id/et_question_count"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:inputType="number"
+            android:text="5"
+            android:padding="12dp"
+            android:background="@drawable/bg_white_rounded"
+            android:elevation="2dp"
+            android:textAlignment="center"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Topics to Include"
+            android:textSize="14sp"
+            android:textColor="@color/text_gray"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_select_quiz_source"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Select Study Materials"
+            android:textColor="@color/primary_brown"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tv_quiz_source"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Source: Latest Upload"
+            android:gravity="center"
+            android:textColor="@color/text_gray"
+            android:textSize="13sp"
+            android:layout_marginTop="12dp" />
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+
+    <Button
+        android:id="@+id/btn_generate_quiz"
+        style="@style/Widget.App.Button"
+        android:layout_width="match_parent"
+        android:layout_height="65dp"
+        android:text="GENERATE QUIZ"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+</LinearLayout>

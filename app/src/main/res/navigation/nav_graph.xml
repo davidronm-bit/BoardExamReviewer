@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/navigation_home">
+
+    <fragment
+        android:id="@+id/navigation_home"
+        android:name="com.example.boardexamreviewer.ui.fragments.HomeFragment"
+        android:label="Home"
+        tools:layout="@layout/fragment_home" />
+
+    <fragment
+        android:id="@+id/navigation_files"
+        android:name="com.example.boardexamreviewer.ui.fragments.FilesFragment"
+        android:label="Uploaded Files"
+        tools:layout="@layout/fragment_files" />
+
+    <fragment
+        android:id="@+id/navigation_quiz"
+        android:name="com.example.boardexamreviewer.ui.fragments.QuizFragment"
+        android:label="Quiz"
+        tools:layout="@layout/fragment_quiz" />
+
+    <fragment
+        android:id="@+id/navigation_pomodoro"
+        android:name="com.example.boardexamreviewer.ui.pomodoro.PomodoroFragment"
+        android:label="Study Clock"
+        tools:layout="@layout/fragment_pomodoro" />
+
+    <fragment
+        android:id="@+id/navigation_progress"
+        android:name="com.example.boardexamreviewer.ui.progress.ProgressFragment"
+        android:label="My Progress"
+        tools:layout="@layout/fragment_progress" />
+
+    <fragment
+        android:id="@+id/navigation_saved"
+        android:name="com.example.boardexamreviewer.ui.fragments.SavedItemsFragment"
+        android:label="Saved Items"
+        tools:layout="@layout/fragment_saved" />
+
+    <fragment
+        android:id="@+id/navigation_quiz_active"
+        android:name="com.example.boardexamreviewer.ui.fragments.QuizActiveFragment"
+        android:label="Active Quiz"
+        tools:layout="@layout/fragment_quiz_active" />
+</navigation>
