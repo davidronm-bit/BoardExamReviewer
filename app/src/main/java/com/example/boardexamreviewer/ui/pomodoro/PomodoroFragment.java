@@ -36,7 +36,7 @@ public class PomodoroFragment extends Fragment {
     private boolean isWorking = true;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    private final TimerService.OnTickListener fragmentTickListener = millis -> {
+    private final TimerService.OnTickListener fragmentTickListener = (studyTime, breakTime) -> {
         if (getActivity() != null) {
             getActivity().runOnUiThread(this::updateUIFromService);
         }
@@ -94,6 +94,10 @@ public class PomodoroFragment extends Fragment {
         binding.etWorkTime.addTextChangedListener(new TextWatcher() {
             @Override
             public void afterTextChanged(Editable s) {
+                String val = s.toString();
+                if (val.startsWith("0")) {
+                    s.replace(0, val.length(), val.replaceFirst("^0+", ""));
+                }
                 if (timerService == null || !timerService.isTimerRunning) {
                     try {
                         long mins = Long.parseLong(s.toString());
@@ -101,6 +105,20 @@ public class PomodoroFragment extends Fragment {
                     } catch (NumberFormatException e) {
                         updateCountDownText(25 * 60 * 1000);
                     }
+                }
+            }
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        });
+
+        binding.etBreakTime.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable s) {
+                String val = s.toString();
+                if (val.startsWith("0")) {
+                    s.replace(0, val.length(), val.replaceFirst("^0+", ""));
                 }
             }
             @Override
@@ -153,9 +171,9 @@ public class PomodoroFragment extends Fragment {
                 binding.spinnerAlarm.setEnabled(targetBtnEnabled);
             }
 
-            if (isRunning || timerService.timeLeftInMillis > 0) {
+            if (isRunning || timerService.studyTimeLeftInMillis > 0 || timerService.breakTimeLeftInMillis > 0) {
                 if (!isBreak) {
-                    updateCountDownText(timerService.timeLeftInMillis);
+                    updateCountDownText(timerService.studyTimeLeftInMillis);
                 } else {
                     updateCountDownText(0);
                 }
@@ -172,7 +190,7 @@ public class PomodoroFragment extends Fragment {
             
             if (isRunning) {
                 binding.btnStartPause.setText("PAUSE");
-            } else if (timerService.timeLeftInMillis > 0) {
+            } else if (timerService.studyTimeLeftInMillis > 0 || timerService.breakTimeLeftInMillis > 0) {
                 binding.btnStartPause.setText("RESUME");
             } else {
                 binding.btnStartPause.setText(isWorking ? "START FOCUS SESSION" : "START BREAK");
@@ -260,10 +278,18 @@ public class PomodoroFragment extends Fragment {
         long workMins = 25;
         long breakMins = 5;
         try {
-            workMins = Long.parseLong(binding.etWorkTime.getText().toString());
+            String wStr = binding.etWorkTime.getText().toString();
+            if (!wStr.isEmpty()) {
+                workMins = Long.parseLong(wStr);
+                if (workMins <= 0) workMins = 25;
+            }
         } catch (NumberFormatException e) {}
         try {
-            breakMins = Long.parseLong(binding.etBreakTime.getText().toString());
+            String bStr = binding.etBreakTime.getText().toString();
+            if (!bStr.isEmpty()) {
+                breakMins = Long.parseLong(bStr);
+                if (breakMins <= 0) breakMins = 5;
+            }
         } catch (NumberFormatException e) {}
 
         SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
