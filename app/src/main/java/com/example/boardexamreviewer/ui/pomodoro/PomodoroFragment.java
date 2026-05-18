@@ -34,8 +34,21 @@ public class PomodoroFragment extends Fragment {
     private TimerService timerService;
     private boolean isBound = false;
     private boolean isWorking = true;
-    private boolean extensionUsed = false;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+    private final TimerService.OnTickListener fragmentTickListener = millis -> {
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(this::updateUIFromService);
+        }
+    };
+    private final TimerService.OnFinishListener fragmentFinishListener = () -> {
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                showAlarmPopup();
+                updateUIFromService();
+            });
+        }
+    };
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -105,41 +118,48 @@ public class PomodoroFragment extends Fragment {
         });
 
         binding.btnStop.setOnClickListener(v -> stopTimer());
-
-        binding.btnExtend.setOnClickListener(v -> {
-            if (!extensionUsed && timerService != null && timerService.isTimerRunning) {
-                extendTimer();
-            }
-        });
     }
 
     private void setupServiceListeners() {
-        timerService.onTickListener = this::updateCountDownText;
-        timerService.onFinishListener = () -> {
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (isWorking) {
-                        saveSession();
-                    }
-                    isWorking = !isWorking;
-                    showAlarmPopup();
-                    
-                    updateUIFromService();
-                    extensionUsed = false;
-                });
-            }
-        };
+        timerService.addOnTickListener(fragmentTickListener);
+        timerService.addOnFinishListener(fragmentFinishListener);
     }
 
     private void updateUIFromService() {
         if (timerService != null) {
             boolean isRunning = timerService.isTimerRunning;
-            binding.etWorkTime.setEnabled(!isRunning);
-            binding.etBreakTime.setEnabled(!isRunning);
+            boolean isBreak = timerService.isBreakMode;
+            boolean isStudyExt = timerService.isStudyExtension && isRunning;
+            
+            boolean targetWorkEnabled = !isRunning && !isBreak && !isStudyExt;
+            if (binding.etWorkTime.isEnabled() != targetWorkEnabled) {
+                binding.etWorkTime.setEnabled(targetWorkEnabled);
+            }
+            if (binding.etBreakTime.isEnabled() != targetWorkEnabled) {
+                binding.etBreakTime.setEnabled(targetWorkEnabled);
+            }
+            
+            boolean targetBtnEnabled = !isBreak && !isStudyExt;
+            if (binding.btnStartPause.isEnabled() != targetBtnEnabled) {
+                binding.btnStartPause.setEnabled(targetBtnEnabled);
+            }
+            if (binding.btnStop.isEnabled() != targetBtnEnabled) {
+                binding.btnStop.setEnabled(targetBtnEnabled);
+            }
+            if (binding.spinnerWhiteNoise.isEnabled() != targetBtnEnabled) {
+                binding.spinnerWhiteNoise.setEnabled(targetBtnEnabled);
+            }
+            if (binding.spinnerAlarm.isEnabled() != targetBtnEnabled) {
+                binding.spinnerAlarm.setEnabled(targetBtnEnabled);
+            }
 
             if (isRunning || timerService.timeLeftInMillis > 0) {
-                updateCountDownText(timerService.timeLeftInMillis);
-                isWorking = !timerService.isBreakMode;
+                if (!isBreak) {
+                    updateCountDownText(timerService.timeLeftInMillis);
+                } else {
+                    updateCountDownText(0);
+                }
+                isWorking = !isBreak;
             } else {
                 long mins;
                 try {
@@ -237,16 +257,26 @@ public class PomodoroFragment extends Fragment {
     private void startTimer() {
         if (timerService == null) return;
         
+        long workMins = 25;
+        long breakMins = 5;
+        try {
+            workMins = Long.parseLong(binding.etWorkTime.getText().toString());
+        } catch (NumberFormatException e) {}
+        try {
+            breakMins = Long.parseLong(binding.etBreakTime.getText().toString());
+        } catch (NumberFormatException e) {}
+
+        SharedPreferences prefs = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        prefs.edit()
+                .putLong("work_time_mins", workMins)
+                .putLong("break_time_mins", breakMins)
+                .apply();
+
         long duration;
         if (timerService.timeLeftInMillis > 0) {
             duration = timerService.timeLeftInMillis;
         } else {
-            long mins;
-            try {
-                mins = Long.parseLong(isWorking ? binding.etWorkTime.getText().toString() : binding.etBreakTime.getText().toString());
-            } catch (NumberFormatException e) {
-                mins = isWorking ? 25 : 5;
-            }
+            long mins = isWorking ? workMins : breakMins;
             duration = mins * 60 * 1000;
         }
         timerService.startTimer(duration, !isWorking);
@@ -269,7 +299,6 @@ public class PomodoroFragment extends Fragment {
             timerService.resetTimer();
         }
         isWorking = true;
-        extensionUsed = false;
         long workMins;
         try {
             workMins = Long.parseLong(binding.etWorkTime.getText().toString());
@@ -280,16 +309,6 @@ public class PomodoroFragment extends Fragment {
         binding.btnStartPause.setText("START FOCUS SESSION");
         binding.etWorkTime.setEnabled(true);
         binding.etBreakTime.setEnabled(true);
-    }
-
-    private void extendTimer() {
-        if (timerService == null) return;
-        
-        long newTime = timerService.timeLeftInMillis + 5 * 60 * 1000;
-        timerService.startTimer(newTime, !isWorking);
-        extensionUsed = true;
-        binding.btnExtend.setEnabled(false);
-        Toast.makeText(getContext(), "Extended by 5 minutes", Toast.LENGTH_SHORT).show();
     }
 
     private void updateCountDownText(long millis) {
@@ -315,26 +334,12 @@ public class PomodoroFragment extends Fragment {
             .show();
     }
 
-    private void saveSession() {
-        int tempDuration;
-        try {
-            tempDuration = Integer.parseInt(binding.etWorkTime.getText().toString());
-        } catch (NumberFormatException e) {
-            tempDuration = 25;
-        }
-        final int duration = tempDuration;
-        Context appContext = requireContext().getApplicationContext();
-
-        executorService.execute(() -> {
-            AppDatabase db = AppDatabase.getDatabase(appContext);
-            db.appDao().insertStudySession(new StudySessionEntity(duration, "Work"));
-        });
-    }
-
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        if (isBound) {
+        if (isBound && timerService != null) {
+            timerService.removeOnTickListener(fragmentTickListener);
+            timerService.removeOnFinishListener(fragmentFinishListener);
             requireContext().unbindService(connection);
             isBound = false;
         }

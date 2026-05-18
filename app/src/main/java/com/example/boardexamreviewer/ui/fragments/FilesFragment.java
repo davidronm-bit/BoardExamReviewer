@@ -14,6 +14,7 @@ import android.widget.Toast;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.activity.result.contract.ActivityResultContracts;
 import com.example.boardexamreviewer.R;
+import com.example.boardexamreviewer.utils.DocumentExtractor;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -95,8 +96,92 @@ public class FilesFragment extends Fragment {
     }
 
     private void handleSelectedFile(android.net.Uri uri) {
-        Toast.makeText(getContext(), "Processing file...", Toast.LENGTH_SHORT).show();
-        Toast.makeText(getContext(), "Please use the Home screen to upload and categorize for now.", Toast.LENGTH_LONG).show();
+        String fileName = DocumentExtractor.getFileName(requireContext(), uri);
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(requireContext());
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 10);
+
+        final android.widget.TextView tvFileName = new android.widget.TextView(requireContext());
+        tvFileName.setText("File: " + fileName);
+        tvFileName.setTextSize(16);
+        tvFileName.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvFileName.setPadding(0, 0, 0, 20);
+        layout.addView(tvFileName);
+
+        final android.widget.EditText etSubject = new android.widget.EditText(requireContext());
+        etSubject.setHint("Subject (e.g. Mathematics)");
+        layout.addView(etSubject);
+
+        final android.widget.EditText etTopic = new android.widget.EditText(requireContext());
+        etTopic.setHint("Topic (e.g. Algebra)");
+        layout.addView(etTopic);
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Categorize Material")
+            .setView(layout)
+            .setCancelable(false)
+            .setPositiveButton("Upload", (dialog, which) -> {
+                String subject = normalizeString(etSubject.getText().toString());
+                String topic = normalizeString(etTopic.getText().toString());
+                if (subject.isEmpty() || topic.isEmpty()) {
+                    Toast.makeText(getContext(), "Please fill all fields", Toast.LENGTH_SHORT).show();
+                    handleSelectedFile(uri);
+                    return;
+                }
+                saveFileToDb(uri, subject, topic);
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private String normalizeString(String input) {
+        if (input == null || input.isEmpty()) return "";
+        String trimmed = input.trim();
+        if (trimmed.isEmpty()) return "";
+        if (trimmed.length() == 1) return trimmed.toUpperCase();
+        return trimmed.substring(0, 1).toUpperCase() + trimmed.substring(1).toLowerCase();
+    }
+
+    private void saveFileToDb(android.net.Uri uri, String subject, String topic) {
+        Context appContext = requireContext().getApplicationContext();
+        binding.progressBar.setVisibility(View.VISIBLE);
+
+        executorService.execute(() -> {
+            try {
+                String text = DocumentExtractor.extractText(appContext, uri);
+                String fileName = DocumentExtractor.getFileName(appContext, uri);
+
+                AppDatabase db = AppDatabase.getDatabase(appContext);
+                DocumentEntity doc = new DocumentEntity(
+                    subject,
+                    topic,
+                    fileName, 
+                    uri.toString(), 
+                    text
+                );
+                db.appDao().insertDocument(doc);
+
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        if (binding != null) {
+                            binding.progressBar.setVisibility(View.GONE);
+                            Toast.makeText(getContext(), "Uploaded: " + fileName, Toast.LENGTH_SHORT).show();
+                            loadDocuments();
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        if (binding != null) {
+                            binding.progressBar.setVisibility(View.GONE);
+                            Toast.makeText(getContext(), "Upload Failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
+            }
+        });
     }
 
     private void startQuizForDoc(DocumentEntity doc) {
@@ -232,7 +317,12 @@ public class FilesFragment extends Fragment {
                 executorService.execute(() -> {
                     AppDatabase db = AppDatabase.getDatabase(appContext);
                     db.appDao().deleteDocument(doc);
-                    loadDocuments();
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            Toast.makeText(getContext(), "Deleted: " + doc.fileName, Toast.LENGTH_SHORT).show();
+                            loadDocuments();
+                        });
+                    }
                 });
             })
             .setNegativeButton("Cancel", null)
