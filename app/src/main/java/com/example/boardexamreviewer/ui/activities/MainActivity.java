@@ -27,6 +27,34 @@ public class MainActivity extends AppCompatActivity {
     private TimerService timerService;
     private boolean isBound = false;
 
+    private final TimerService.OnTickListener mainTickListener = this::updateLockdownUI;
+    private final TimerService.OnFinishListener mainFinishListener = () -> {
+        runOnUiThread(() -> {
+            if (timerService != null && timerService.isBreakMode && timerService.isTimerRunning) {
+                if (binding.lockdownOverlay.getVisibility() != View.VISIBLE) {
+                    binding.lockdownOverlay.setVisibility(View.VISIBLE);
+                }
+                int targetExtendVis = !timerService.wasExtended ? View.VISIBLE : View.GONE;
+                if (binding.btnLockdownExtend.getVisibility() != targetExtendVis) {
+                    binding.btnLockdownExtend.setVisibility(targetExtendVis);
+                }
+            } else {
+                if (binding.lockdownOverlay.getVisibility() != View.GONE) {
+                    binding.lockdownOverlay.setVisibility(View.GONE);
+                }
+            }
+            if (timerService != null) {
+                boolean isStudyExt = timerService.isStudyExtension && timerService.isTimerRunning;
+                for (int i = 0; i < binding.bottomNavigation.getMenu().size(); i++) {
+                    MenuItem item = binding.bottomNavigation.getMenu().getItem(i);
+                    if (item.isEnabled() != !isStudyExt) {
+                        item.setEnabled(!isStudyExt);
+                    }
+                }
+            }
+        });
+    };
+
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
@@ -78,6 +106,12 @@ public class MainActivity extends AppCompatActivity {
             NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         }
 
+        binding.btnLockdownExtend.setOnClickListener(v -> {
+            if (timerService != null) {
+                timerService.extendTimer(5 * 60 * 1000);
+            }
+        });
+
         Intent serviceIntent = new Intent(this, TimerService.class);
         bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE);
     }
@@ -85,30 +119,30 @@ public class MainActivity extends AppCompatActivity {
     private void setupTimerListeners() {
         if (timerService == null) return;
 
-        TimerService.OnTickListener existingTick = timerService.onTickListener;
-        timerService.onTickListener = millis -> {
-            if (existingTick != null) existingTick.onTick(millis);
-            updateLockdownUI(millis);
-        };
-
-        TimerService.OnFinishListener existingFinish = timerService.onFinishListener;
-        timerService.onFinishListener = () -> {
-            if (existingFinish != null) existingFinish.onFinish();
-            runOnUiThread(() -> {
-                if (timerService.isBreakMode) {
-                    binding.lockdownOverlay.setVisibility(View.VISIBLE);
-                } else {
-                    binding.lockdownOverlay.setVisibility(View.GONE);
-                }
-            });
-        };
+        timerService.addOnTickListener(mainTickListener);
+        timerService.addOnFinishListener(mainFinishListener);
         
         runOnUiThread(() -> {
             if (timerService.isTimerRunning && timerService.isBreakMode) {
-                binding.lockdownOverlay.setVisibility(View.VISIBLE);
+                if (binding.lockdownOverlay.getVisibility() != View.VISIBLE) {
+                    binding.lockdownOverlay.setVisibility(View.VISIBLE);
+                }
+                int targetExtendVis = !timerService.wasExtended ? View.VISIBLE : View.GONE;
+                if (binding.btnLockdownExtend.getVisibility() != targetExtendVis) {
+                    binding.btnLockdownExtend.setVisibility(targetExtendVis);
+                }
                 updateLockdownUI(timerService.timeLeftInMillis);
             } else {
-                binding.lockdownOverlay.setVisibility(View.GONE);
+                if (binding.lockdownOverlay.getVisibility() != View.GONE) {
+                    binding.lockdownOverlay.setVisibility(View.GONE);
+                }
+            }
+            boolean isStudyExt = timerService.isStudyExtension && timerService.isTimerRunning;
+            for (int i = 0; i < binding.bottomNavigation.getMenu().size(); i++) {
+                MenuItem item = binding.bottomNavigation.getMenu().getItem(i);
+                if (item.isEnabled() != !isStudyExt) {
+                    item.setEnabled(!isStudyExt);
+                }
             }
         });
     }
@@ -116,12 +150,29 @@ public class MainActivity extends AppCompatActivity {
     private void updateLockdownUI(long millis) {
         runOnUiThread(() -> {
             if (timerService != null && timerService.isBreakMode && timerService.isTimerRunning) {
-                binding.lockdownOverlay.setVisibility(View.VISIBLE);
+                if (binding.lockdownOverlay.getVisibility() != View.VISIBLE) {
+                    binding.lockdownOverlay.setVisibility(View.VISIBLE);
+                }
+                int targetExtendVis = !timerService.wasExtended ? View.VISIBLE : View.GONE;
+                if (binding.btnLockdownExtend.getVisibility() != targetExtendVis) {
+                    binding.btnLockdownExtend.setVisibility(targetExtendVis);
+                }
                 long minutes = (millis / 1000) / 60;
                 long seconds = (millis / 1000) % 60;
                 binding.tvLockdownTimer.setText(String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds));
             } else {
-                binding.lockdownOverlay.setVisibility(View.GONE);
+                if (binding.lockdownOverlay.getVisibility() != View.GONE) {
+                    binding.lockdownOverlay.setVisibility(View.GONE);
+                }
+            }
+            if (timerService != null) {
+                boolean isStudyExt = timerService.isStudyExtension && timerService.isTimerRunning;
+                for (int i = 0; i < binding.bottomNavigation.getMenu().size(); i++) {
+                    MenuItem item = binding.bottomNavigation.getMenu().getItem(i);
+                    if (item.isEnabled() != !isStudyExt) {
+                        item.setEnabled(!isStudyExt);
+                    }
+                }
             }
         });
     }
@@ -138,6 +189,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (timerService != null) {
+            timerService.removeOnTickListener(mainTickListener);
+            timerService.removeOnFinishListener(mainFinishListener);
+        }
         if (isBound) {
             unbindService(connection);
             isBound = false;

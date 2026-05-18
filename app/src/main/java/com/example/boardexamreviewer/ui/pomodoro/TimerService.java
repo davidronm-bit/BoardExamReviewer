@@ -18,6 +18,10 @@ import android.os.IBinder;
 import androidx.core.app.NotificationCompat;
 import com.example.boardexamreviewer.ui.activities.MainActivity;
 import com.example.boardexamreviewer.R;
+import com.example.boardexamreviewer.data.local.AppDatabase;
+import com.example.boardexamreviewer.data.local.entities.StudySessionEntity;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * This service runs in the background to keep the study timer alive.
@@ -32,6 +36,8 @@ public class TimerService extends Service {
     public long timeLeftInMillis = 0;
     public boolean isTimerRunning = false;
     public boolean isBreakMode = false;
+    public boolean isStudyExtension = false;
+    public boolean wasExtended = false;
     
     public interface OnTickListener {
         void onTick(long millisUntilFinished);
@@ -41,8 +47,28 @@ public class TimerService extends Service {
         void onFinish();
     }
     
-    public OnTickListener onTickListener;
-    public OnFinishListener onFinishListener;
+    private final List<OnTickListener> tickListeners = new ArrayList<>();
+    private final List<OnFinishListener> finishListeners = new ArrayList<>();
+
+    public void addOnTickListener(OnTickListener listener) {
+        if (!tickListeners.contains(listener)) {
+            tickListeners.add(listener);
+        }
+    }
+
+    public void removeOnTickListener(OnTickListener listener) {
+        tickListeners.remove(listener);
+    }
+
+    public void addOnFinishListener(OnFinishListener listener) {
+        if (!finishListeners.contains(listener)) {
+            finishListeners.add(listener);
+        }
+    }
+
+    public void removeOnFinishListener(OnFinishListener listener) {
+        finishListeners.remove(listener);
+    }
     
     private String selectedAmbient = "None";
     private String selectedAlarm = "Wake Up";
@@ -66,18 +92,22 @@ public class TimerService extends Service {
 
     public void startTimer(long durationMillis, boolean breakMode) {
         this.isBreakMode = breakMode;
+        if (!breakMode && !isStudyExtension) {
+            wasExtended = false;
+        }
         timeLeftInMillis = durationMillis;
         
         if (timer != null) {
             timer.cancel();
+            timer = null;
         }
 
         timer = new CountDownTimer(timeLeftInMillis, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
                 timeLeftInMillis = millisUntilFinished;
-                if (onTickListener != null) {
-                    onTickListener.onTick(timeLeftInMillis);
+                for (OnTickListener listener : new ArrayList<>(tickListeners)) {
+                    listener.onTick(timeLeftInMillis);
                 }
                 updateNotification();
             }
@@ -85,21 +115,31 @@ public class TimerService extends Service {
             @Override
             public void onFinish() {
                 isTimerRunning = false;
-                
-                // Stop ambient noise
                 stopAmbient();
-                
-                // START THE ALARM HERE (Service handles it now)
                 playAlarm(selectedAlarm);
-                
-                // Reset time for next session
                 timeLeftInMillis = 0;
-                isBreakMode = !isBreakMode;
 
-                if (onFinishListener != null) {
-                    onFinishListener.onFinish();
+                if (isStudyExtension) {
+                    saveSessionToDb(5);
+                    isStudyExtension = false;
+                    isBreakMode = false;
+                    timeLeftInMillis = 0;
+                    stopForeground(STOP_FOREGROUND_REMOVE);
+                } else if (!isBreakMode) {
+                    SharedPreferences prefs = getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+                    long workMins = prefs.getLong("work_time_mins", 25);
+                    saveSessionToDb(workMins);
+                    isBreakMode = true;
+                    long breakMins = prefs.getLong("break_time_mins", 5);
+                    startTimer(breakMins * 60 * 1000, true);
+                } else {
+                    isBreakMode = false;
+                    stopForeground(STOP_FOREGROUND_REMOVE);
                 }
-                stopForeground(true);
+
+                for (OnFinishListener listener : new ArrayList<>(finishListeners)) {
+                    listener.onFinish();
+                }
             }
         }.start();
 
@@ -110,21 +150,45 @@ public class TimerService extends Service {
     public void pauseTimer() {
         if (timer != null) {
             timer.cancel();
+            timer = null;
         }
         isTimerRunning = false;
         stopAudio();
-        stopForeground(true);
+        stopForeground(STOP_FOREGROUND_REMOVE);
+    }
+
+    private void saveSessionToDb(long mins) {
+        new Thread(() -> {
+            try {
+                AppDatabase db = AppDatabase.getDatabase(getApplicationContext());
+                db.appDao().insertStudySession(new StudySessionEntity((int) mins, "Work"));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    public void extendTimer(long extraMillis) {
+        if (isTimerRunning && isBreakMode && !wasExtended) {
+            wasExtended = true;
+            isStudyExtension = true;
+            isBreakMode = false;
+            startTimer(extraMillis, false);
+        }
     }
 
     public void resetTimer() {
         if (timer != null) {
             timer.cancel();
+            timer = null;
         }
         isTimerRunning = false;
         isBreakMode = false;
+        isStudyExtension = false;
+        wasExtended = false;
         timeLeftInMillis = 0;
         stopAudio();
-        stopForeground(true);
+        stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
 

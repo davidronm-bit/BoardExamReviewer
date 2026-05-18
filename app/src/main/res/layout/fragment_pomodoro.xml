@@ -120,15 +120,6 @@
             android:layout_marginBottom="12dp" />
 
         <Button
-            android:id="@+id/btn_extend"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:text="EXTEND +5 MINS"
-            android:textColor="@color/primary_brown"
-            android:layout_marginBottom="12dp" />
-
-        <Button
             android:id="@+id/btn_stop"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
