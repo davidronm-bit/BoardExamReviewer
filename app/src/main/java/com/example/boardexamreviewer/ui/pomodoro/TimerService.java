@@ -29,10 +29,11 @@ import java.util.List;
 public class TimerService extends Service {
 
     private final IBinder binder = new TimerBinder();
-    private CountDownTimer timer;
-    private MediaPlayer ambientPlayer;
-    private MediaPlayer alarmPlayer;
+    private CountDownTimer studyTimer;
+    private CountDownTimer breakTimer;
     
+    public long studyTimeLeftInMillis = 0;
+    public long breakTimeLeftInMillis = 0;
     public long timeLeftInMillis = 0;
     public boolean isTimerRunning = false;
     public boolean isBreakMode = false;
@@ -40,7 +41,7 @@ public class TimerService extends Service {
     public boolean wasExtended = false;
     
     public interface OnTickListener {
-        void onTick(long millisUntilFinished);
+        void onTick(long studyTimeLeft, long breakTimeLeft);
     }
     
     public interface OnFinishListener {
@@ -90,24 +91,46 @@ public class TimerService extends Service {
         createNotificationChannel();
     }
 
+    private MediaPlayer ambientPlayer;
+    private MediaPlayer alarmPlayer;
+
+    private void cancelTimers() {
+        if (studyTimer != null) {
+            studyTimer.cancel();
+            studyTimer = null;
+        }
+        if (breakTimer != null) {
+            breakTimer.cancel();
+            breakTimer = null;
+        }
+    }
+
     public void startTimer(long durationMillis, boolean breakMode) {
-        this.isBreakMode = breakMode;
-        if (!breakMode && !isStudyExtension) {
+        if (breakMode) {
+            startBreakTimer(durationMillis);
+        } else {
+            startStudyTimer(durationMillis);
+        }
+    }
+
+    public void startStudyTimer(long durationMillis) {
+        this.isBreakMode = false;
+        if (!isStudyExtension) {
             wasExtended = false;
         }
+        studyTimeLeftInMillis = durationMillis;
+        breakTimeLeftInMillis = 0;
         timeLeftInMillis = durationMillis;
         
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
+        cancelTimers();
 
-        timer = new CountDownTimer(timeLeftInMillis, 1000) {
+        studyTimer = new CountDownTimer(studyTimeLeftInMillis, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
+                studyTimeLeftInMillis = millisUntilFinished;
                 timeLeftInMillis = millisUntilFinished;
                 for (OnTickListener listener : new ArrayList<>(tickListeners)) {
-                    listener.onTick(timeLeftInMillis);
+                    listener.onTick(studyTimeLeftInMillis, 0);
                 }
                 updateNotification();
             }
@@ -115,26 +138,23 @@ public class TimerService extends Service {
             @Override
             public void onFinish() {
                 isTimerRunning = false;
+                studyTimeLeftInMillis = 0;
+                timeLeftInMillis = 0;
                 stopAmbient();
                 playAlarm(selectedAlarm);
-                timeLeftInMillis = 0;
 
                 if (isStudyExtension) {
                     saveSessionToDb(5);
                     isStudyExtension = false;
-                    isBreakMode = false;
-                    timeLeftInMillis = 0;
-                    stopForeground(STOP_FOREGROUND_REMOVE);
-                } else if (!isBreakMode) {
+                    isBreakMode = true;
+                    SharedPreferences prefs = getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+                    long breakMins = prefs.getLong("break_time_mins", 5);
+                    startBreakTimer(breakMins * 60 * 1000);
+                } else {
                     SharedPreferences prefs = getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
                     long workMins = prefs.getLong("work_time_mins", 25);
                     saveSessionToDb(workMins);
-                    isBreakMode = true;
-                    long breakMins = prefs.getLong("break_time_mins", 5);
-                    startTimer(breakMins * 60 * 1000, true);
-                } else {
-                    isBreakMode = false;
-                    stopForeground(STOP_FOREGROUND_REMOVE);
+                    startBreakTimer(prefs.getLong("break_time_mins", 5) * 60 * 1000);
                 }
 
                 for (OnFinishListener listener : new ArrayList<>(finishListeners)) {
@@ -147,11 +167,47 @@ public class TimerService extends Service {
         startForeground(1, createNotification());
     }
 
+    public void startBreakTimer(long durationMillis) {
+        this.isBreakMode = true;
+        breakTimeLeftInMillis = durationMillis;
+        studyTimeLeftInMillis = 0;
+        timeLeftInMillis = durationMillis;
+        
+        cancelTimers();
+
+        breakTimer = new CountDownTimer(breakTimeLeftInMillis, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                breakTimeLeftInMillis = millisUntilFinished;
+                timeLeftInMillis = millisUntilFinished;
+                for (OnTickListener listener : new ArrayList<>(tickListeners)) {
+                    listener.onTick(0, breakTimeLeftInMillis);
+                }
+                updateNotification();
+            }
+
+            @Override
+            public void onFinish() {
+                isTimerRunning = false;
+                breakTimeLeftInMillis = 0;
+                timeLeftInMillis = 0;
+                stopAmbient();
+                playAlarm(selectedAlarm);
+                isBreakMode = false;
+                stopForeground(STOP_FOREGROUND_REMOVE);
+
+                for (OnFinishListener listener : new ArrayList<>(finishListeners)) {
+                    listener.onFinish();
+                }
+            }
+        }.start();
+
+        isTimerRunning = true;
+        startForeground(1, createNotification());
+    }
+
     public void pauseTimer() {
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
+        cancelTimers();
         isTimerRunning = false;
         stopAudio();
         stopForeground(STOP_FOREGROUND_REMOVE);
@@ -173,19 +229,18 @@ public class TimerService extends Service {
             wasExtended = true;
             isStudyExtension = true;
             isBreakMode = false;
-            startTimer(extraMillis, false);
+            startStudyTimer(extraMillis);
         }
     }
 
     public void resetTimer() {
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
+        cancelTimers();
         isTimerRunning = false;
         isBreakMode = false;
         isStudyExtension = false;
         wasExtended = false;
+        studyTimeLeftInMillis = 0;
+        breakTimeLeftInMillis = 0;
         timeLeftInMillis = 0;
         stopAudio();
         stopForeground(STOP_FOREGROUND_REMOVE);

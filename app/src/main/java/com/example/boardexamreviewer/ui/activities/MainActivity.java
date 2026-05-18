@@ -27,7 +27,7 @@ public class MainActivity extends AppCompatActivity {
     private TimerService timerService;
     private boolean isBound = false;
 
-    private final TimerService.OnTickListener mainTickListener = this::updateLockdownUI;
+    private final TimerService.OnTickListener mainTickListener = (studyTime, breakTime) -> updateLockdownUI(breakTime);
     private final TimerService.OnFinishListener mainFinishListener = () -> {
         runOnUiThread(() -> {
             if (timerService != null && timerService.isBreakMode && timerService.isTimerRunning) {
@@ -131,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
                 if (binding.btnLockdownExtend.getVisibility() != targetExtendVis) {
                     binding.btnLockdownExtend.setVisibility(targetExtendVis);
                 }
-                updateLockdownUI(timerService.timeLeftInMillis);
+                updateLockdownUI(timerService.breakTimeLeftInMillis);
             } else {
                 if (binding.lockdownOverlay.getVisibility() != View.GONE) {
                     binding.lockdownOverlay.setVisibility(View.GONE);
@@ -147,7 +147,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void updateLockdownUI(long millis) {
+    private void updateLockdownUI(long breakTime) {
         runOnUiThread(() -> {
             if (timerService != null && timerService.isBreakMode && timerService.isTimerRunning) {
                 if (binding.lockdownOverlay.getVisibility() != View.VISIBLE) {
@@ -157,8 +157,8 @@ public class MainActivity extends AppCompatActivity {
                 if (binding.btnLockdownExtend.getVisibility() != targetExtendVis) {
                     binding.btnLockdownExtend.setVisibility(targetExtendVis);
                 }
-                long minutes = (millis / 1000) / 60;
-                long seconds = (millis / 1000) % 60;
+                long minutes = (breakTime / 1000) / 60;
+                long seconds = (breakTime / 1000) % 60;
                 binding.tvLockdownTimer.setText(String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds));
             } else {
                 if (binding.lockdownOverlay.getVisibility() != View.GONE) {
