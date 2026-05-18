@@ -57,6 +57,23 @@ public class MainActivity extends AppCompatActivity {
             NavController navController = navHostFragment.getNavController();
             NavigationUI.setupWithNavController(navView, navController);
             
+            navView.setOnItemSelectedListener(item -> {
+                navController.navigate(item.getItemId(), null, new androidx.navigation.NavOptions.Builder()
+                        .setLaunchSingleTop(true)
+                        .setPopUpTo(R.id.navigation_home, false)
+                        .build());
+                return true;
+            });
+
+            navView.setOnItemReselectedListener(item -> {
+                if (navController.getCurrentDestination() != null && navController.getCurrentDestination().getId() != item.getItemId()) {
+                    navController.navigate(item.getItemId(), null, new androidx.navigation.NavOptions.Builder()
+                            .setLaunchSingleTop(true)
+                            .setPopUpTo(R.id.navigation_home, false)
+                            .build());
+                }
+            });
+            
             AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(navView.getMenu()).build();
             NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         }
